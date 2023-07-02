@@ -1,9 +1,11 @@
-// Simple citro2d untextured shape example
+#include <3ds.h>
 #include <citro2d.h>
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "zig-3ds.h"
 
 
 #define SCREEN_WIDTH  400
@@ -44,6 +46,8 @@ int main(int argc, char* argv[]) {
 
 	u32 clrClear = C2D_Color32(0xFF, 0xD8, 0xB0, 0x68);
 
+	u32 i = 0;
+
 	// Main loop
 	while (aptMainLoop())
 	{
@@ -57,6 +61,7 @@ int main(int argc, char* argv[]) {
 		printf("\x1b[2;1HCPU:     %6.2f%%\x1b[K", C3D_GetProcessingTime()*6.0f);
 		printf("\x1b[3;1HGPU:     %6.2f%%\x1b[K", C3D_GetDrawingTime()*6.0f);
 		printf("\x1b[4;1HCmdBuf:  %6.2f%%\x1b[K", C3D_GetCmdBufUsage()*100.0f);
+		printf("\x1b[5;1HNum:  %d\x1b[K", zig_add(5, i++));
 
 		// Render the scene
 		C3D_FrameBegin(C3D_FRAME_SYNCDRAW);

@@ -1,37 +1,74 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+const emulator = "citra";
+const flags = .{"-lcitro2d", "-lcitro3d", "-lctru", "-lm"};
+const devkitpro = "/opt/devkitpro";
+//const zig_install_dir = "/Users/pfg/zig/0.11.0-dev.3905+309aacfc8/files/";
+
+pub fn build(b: *std.build.Builder) void {
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "tmp",
+    const obj = b.addObject(.{
+        .name = "zig-3ds",
         .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
+        .target = .{
+            .cpu_arch = .arm,
+            .os_tag = .freestanding,
+            .abi = .eabihf,
+            .cpu_model = .{ .explicit = &std.Target.arm.cpu.mpcore },
+        },
         .optimize = optimize,
     });
+    //obj.setOutputDir("zig-out");
+    obj.linkLibC();
+    obj.setLibCFile(std.build.FileSource{ .path = "libc.txt" });
+    const include_dir_1 = devkitpro ++ "/libctru/include";
+    const include_dir_2 = devkitpro ++ "/portlibs/3ds/include";
+    obj.addIncludePath(include_dir_1);
+    obj.addIncludePath(include_dir_2);
+    obj.emit_h = true;
 
-    b.installArtifact(exe);
+    //std.log.info("out_filename: {any}", .{obj.output_path_source});
 
-    const run_cmd = b.addRunArtifact(exe);
+    const insf = b.addInstallFile(.{.generated = &obj.output_path_source}, "zig-3ds.o");
 
-    run_cmd.step.dependOn(b.getInstallStep());
+    const extension = if (builtin.target.os.tag == .windows) ".exe" else "";
+    const elf = b.addSystemCommand(&(.{
+        devkitpro ++ "/devkitARM/bin/arm-none-eabi-gcc" ++ extension,
+        "-g",
+        "-march=armv6k",
+        "-mtune=mpcore",
+        "-mfloat-abi=hard",
+        "-mtp=soft",
+        "-Wl,-Map,zig-out/zig-3ds.map",
+        "-specs=" ++ devkitpro ++ "/devkitARM/arm-none-eabi/lib/3dsx.specs",
+        "zig-out/zig-3ds.o",
+        "src/all.c",
+        "-I" ++ include_dir_1,
+        "-I" ++ include_dir_2,
+        "-I" ++ ".",
+        "-I" ++ "src",
+        //"-I" ++ zig_install_dir ++ "/lib",
+        "-L" ++ devkitpro ++ "/libctru/lib",
+        "-L" ++ devkitpro ++ "/portlibs/3ds/lib",
+    } ++ flags ++ .{
+        "-o", "zig-out/zig-3ds.elf",
+    }));
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
+    const dsx = b.addSystemCommand(&.{
+        devkitpro ++ "/tools/bin/3dsxtool" ++ extension,
+        "zig-out/zig-3ds.elf",
+        "zig-out/zig-3ds.3dsx",
     });
+    //dsx.stdout_action = .ignore;
 
-    const run_unit_tests = b.addRunArtifact(unit_tests);
+    b.default_step.dependOn(&dsx.step);
+    dsx.step.dependOn(&elf.step);
+    elf.step.dependOn(&insf.step);
 
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
+    const run_step = b.step("run", "Run in Citra");
+    const citra = b.addSystemCommand(&.{ emulator, "zig-out/zig-3ds.3dsx" });
+    run_step.dependOn(&dsx.step);
+    run_step.dependOn(&citra.step);
 }
