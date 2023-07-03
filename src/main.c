@@ -72,16 +72,8 @@ int main(int argc, char* argv[]) {
 			0,  SCREEN_HEIGHT, clrTri1,
 			50, SCREEN_HEIGHT, clrTri2, 0);
 		C2D_DrawRectangle(SCREEN_WIDTH - 50, 0, 0, 50, 50, clrRec1, clrRec2, clrRec3, clrRec4);
+		zig_update();
 
-		// Circles require a state change (an expensive operation) within citro2d's internals, so draw them last.
-		// Although it is possible to draw them in the middle of drawing non-circular objects
-		// (sprites, images, triangles, rectangles, etc.) this is not recommended. They should either
-		// be drawn before all non-circular objects, or afterwards.
-		C2D_DrawEllipse(0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, clrCircle1, clrCircle2, clrCircle3, clrWhite);
-		C2D_DrawCircle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 0, 50, clrCircle3, clrWhite, clrCircle1, clrCircle2);
-		C2D_DrawCircle(25, 25, 0, 25,
-			clrRed, clrBlue, clrGreen, clrWhite);
-		C2D_DrawCircleSolid(SCREEN_WIDTH - 25, SCREEN_HEIGHT - 25, 0, 25, clrSolidCircle);
 		C3D_FrameEnd(0);
 	}
 
