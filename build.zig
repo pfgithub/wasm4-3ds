@@ -7,6 +7,11 @@ const devkitpro = "/opt/devkitpro";
 const c_files = .{"src/c.c", "src/main.c"};
 //const zig_install_dir = "/Users/pfg/zig/0.11.0-dev.3905+309aacfc8/files/";
 
+const include_dir_1 = devkitpro ++ "/libctru/include";
+const include_dir_2 = devkitpro ++ "/portlibs/3ds/include";
+const include_dir_3 = "src";
+const include_dir_4 = "src/plctfarmer";
+
 pub fn build(b: *std.build.Builder) void {
     const optimize = b.standardOptimizeOption(.{});
 
@@ -24,12 +29,10 @@ pub fn build(b: *std.build.Builder) void {
     //obj.setOutputDir("zig-out");
     obj.linkLibC();
     obj.setLibCFile(std.build.FileSource{ .path = "libc.txt" });
-    const include_dir_1 = devkitpro ++ "/libctru/include";
-    const include_dir_2 = devkitpro ++ "/portlibs/3ds/include";
-    const include_dir_3 = "src";
     obj.addIncludePath(include_dir_1);
     obj.addIncludePath(include_dir_2);
     obj.addIncludePath(include_dir_3);
+    obj.addIncludePath(include_dir_4);
     obj.emit_h = true;
 
     //std.log.info("out_filename: {any}", .{obj.output_path_source});
@@ -51,6 +54,7 @@ pub fn build(b: *std.build.Builder) void {
         "-I" ++ include_dir_1,
         "-I" ++ include_dir_2,
         "-I" ++ include_dir_3,
+        "-I" ++ include_dir_4,
         "-I" ++ ".",
         //"-I" ++ zig_install_dir ++ "/lib",
         "-L" ++ devkitpro ++ "/libctru/lib",
