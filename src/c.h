@@ -17,8 +17,8 @@
 #define BODY(x) ;
 #endif
 
-#define f32 float
-#define u32 uint32_t
+typedef float f32;
+typedef uint32_t u32;
 
 zig_extern void c_rect(f32 x, f32 y, f32 z, f32 w, f32 h, u32 color) BODY({
     C2D_DrawRectangle(x, y, z, w, h, color, color, color, color);

@@ -25,10 +25,16 @@ async function clean() {
 }
 
 async function main() {
-  await exec(["mkdir", "-p", "artifact"]);
-  await exec(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "artifact/game.c"]);
+  const build_mode = "Debug";
 
-  let translate_c_res = await exec(["zig", "translate-c", "src/c.h", ...zig_flags]);
+  await exec(["mkdir", "-p", "artifact"]);
+
+  await exec(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "artifact/game.c"]);
+  let gamecontent = await Bun.file("artifact/game.c").text();
+  gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
+  await Bun.write("artifact/game.c", gamecontent);
+
+  let translate_c_res = await exec(["zig", "translate-c", "src/all-translate.h", ...zig_flags]);
   translate_c_res = translate_c_res.replaceAll("@\"\"", "__INVALID_IDENTIFIER");
   translate_c_res = translate_c_res.replaceAll(`pub const struct_C3D_RenderTarget_tag = extern struct {
     next: ?*C3D_RenderTarget,
@@ -50,7 +56,8 @@ async function main() {
     ...zig_flags,
     "-femit-bin=artifact/zigpart.c",
     "-femit-h=artifact/zigpart.h",
-    "-OReleaseSafe",
+    //"-OReleaseSafe",
+    "-O"+build_mode,
     "--mod", "c::artifact/translate_c_res.zig",
     "--deps", "c",
     "-freference-trace",
@@ -75,6 +82,9 @@ async function main() {
     "-L" + devkitpro + "/portlibs/3ds/lib",
     ...c_flags,
     "-o", "artifact/zig-3ds.elf",
+    "-Wno-incompatible-pointer-types",
+    "-Wno-builtin-declaration-mismatch",
+    build_mode === "Debug" ? "" : "-O2",
   ]);
 
   await exec([
