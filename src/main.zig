@@ -65,15 +65,14 @@ fn app_main() !void {
 		//_ = c.printf("\x1b[3;1HGPU:     %6.2f%%\x1b[K", c.C3D_GetDrawingTime()*6.0);
 		//_ = c.printf("\x1b[4;1HCmdBuf:  %6.2f%%\x1b[K", c.C3D_GetCmdBufUsage()*100.0);
 		//_ = c.printf("\x1b[5;1HNum:  %d\x1b[K", i);
-        std.log.info("Simple citro2d shapes example", .{});
-        const proc_time = @as(u32, @intFromFloat(c.C3D_GetProcessingTime()*6.0*100));
-        const draw_time = @as(u32, @intFromFloat(c.C3D_GetDrawingTime()*6.0*100));
-        const cmdbuf_usage = @as(u32, @intFromFloat(c.C3D_GetCmdBufUsage()*100.0*10));
-
-        std.log.info("CPU: {d}.{d:0>2}%", .{proc_time / 100, proc_time % 100});
-        std.log.info("GPU: {d}.{d:0>2}%", .{draw_time / 100, draw_time % 100});
-        std.log.info("CmdBuf: {d}.{d:0>2}%", .{cmdbuf_usage, cmdbuf_usage % 100});
-        std.log.info("Num: {d}", .{i});
+        //std.log.info("Simple citro2d shapes example", .{});
+        //const proc_time = @as(u32, @intFromFloat(c.C3D_GetProcessingTime()*6.0*100));
+        //const draw_time = @as(u32, @intFromFloat(c.C3D_GetDrawingTime()*6.0*100));
+        //const cmdbuf_usage = @as(u32, @intFromFloat(c.C3D_GetCmdBufUsage()*100.0*10));
+        //std.log.info("CPU: {d}.{d:0>2}%", .{proc_time / 100, proc_time % 100});
+        //std.log.info("GPU: {d}.{d:0>2}%", .{draw_time / 100, draw_time % 100});
+        //std.log.info("CmdBuf: {d}.{d:0>2}%", .{cmdbuf_usage, cmdbuf_usage % 100});
+        std.log.info("Frame: {d}", .{i});
         if(k_held & c.KEY_TOUCH != 0) std.log.info("Touch: {d}, {d}", .{touch.px, touch.py});
 
 		// Render the scene
