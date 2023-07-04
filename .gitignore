@@ -2,6 +2,7 @@
 /*.elf
 /*.smdh
 /build
+artifact/
 zig-cache/
 zig-out/
 zig-3ds.h

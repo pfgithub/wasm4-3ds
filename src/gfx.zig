@@ -1,4 +1,4 @@
-const c = @import("c.zig");
+const c = @import("c");
 const math = @import("math.zig");
 
 pub fn rect(pos: math.vec3f, size: math.vec2f, color: math.Color) void {
