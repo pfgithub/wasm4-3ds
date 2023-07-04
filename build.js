@@ -25,7 +25,7 @@ async function clean() {
 }
 
 async function main() {
-  const build_mode = "Debug";
+  const build_mode = "ReleaseFast";
 
   await exec(["mkdir", "-p", "artifact"]);
 
@@ -84,7 +84,7 @@ async function main() {
     "-o", "artifact/zig-3ds.elf",
     "-Wno-incompatible-pointer-types",
     "-Wno-builtin-declaration-mismatch",
-    build_mode === "Debug" ? "" : "-O2",
+    build_mode === "Debug" ? "" : "-O3",
   ]);
 
   await exec([

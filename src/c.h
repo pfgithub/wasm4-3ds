@@ -28,4 +28,8 @@ zig_extern void c_C2D_SceneBegin(C3D_RenderTarget* target) BODY({
     C2D_SceneBegin(target);
 })
 
+zig_extern void c_gspWaitForVBlank(void) BODY({
+    gspWaitForVBlank();
+})
+
 #endif
