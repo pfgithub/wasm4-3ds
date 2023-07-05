@@ -14,3 +14,4 @@ run wasm4 games on 3ds
     on the screen. we can render it the traditional way instead, as an overlay instead of a cpu shader.
   - benchmark. these are my guesses based on observed behaviour, but there might be other things
     that are issues.
+- build every game into one file? wasm4 launcher with all the games in site/static/carts/

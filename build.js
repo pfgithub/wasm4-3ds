@@ -65,6 +65,8 @@ async function main() {
   gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
   await Bun.write("intermediate/game.c", gamecontent);
 
+  await exec(["w4", "png2src", "src/w4rt/font.png", "--c", "-o", "intermediate/font.png"]);
+
   let translate_c_res = await exec(["zig", "translate-c", "src/all-translate.h", ...zig_flags]);
   translate_c_res = translate_c_res.replaceAll("@\"\"", "__INVALID_IDENTIFIER");
   translate_c_res = translate_c_res.replaceAll(`pub const struct_C3D_RenderTarget_tag = extern struct {

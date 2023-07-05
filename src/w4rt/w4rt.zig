@@ -176,9 +176,23 @@ pub const Game = struct {
         std.log.info("TODO rect {} {} {} {}", .{x, y, w, h});
     }
 
+    export fn w2c_env_blit(env: *WasmEnv, x: u32, y: u32, w: u32, h: u32, flags: u32) void {
+        _ = env;
+        std.log.info("TODO bilt {} {} {} {} {}", .{x, y, w, h, flags});
+    }
+
     export fn w2c_env_textUtf8(env: *WasmEnv, str: u32, len: u32, x: u32, y: u32) void {
         if(env.memory.size < str + len) unreachable;
         std.log.info("TODO text \"{s}\" {} {}", .{env.memory.data[str..][0..len], x, y});
+    }
+    export fn w2c_env_text(env: *WasmEnv, str: u32, x: u32, y: u32) void {
+        const len = std.mem.indexOfScalar(u8, env.memory.data[str..@intCast(env.memory.size)], 0) orelse return;
+        w2c_env_textUtf8(env, str, @intCast(len), x, y);
+    }
+    export fn w2c_env_trace(env: *WasmEnv, str: u32) void {
+        const len = std.mem.indexOfScalar(u8, env.memory.data[str..@intCast(env.memory.size)], 0) orelse return;
+        const slice = env.memory.data[str..][0..len];
+        std.log.scoped(.trace).info("{s}", .{slice});
     }
 
     export fn w2c_env_tone(env: *c.struct_w2c_env, frequency: u32, duration: u32, volume: u32, flags: u32) void {

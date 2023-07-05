@@ -2,7 +2,7 @@ const c = @import("c");
 const gfx = @import("gfx.zig");
 const std = @import("std");
 
-const w4 = @import("w4rt.zig");
+const w4 = @import("w4rt/w4rt.zig");
 
 export fn zig_update() void {
     gfx.rect(.{0, 0, 0}, gfx.screen_size_2f, .{.r = 255, .g = 0, .b = 255, .a = 255});
