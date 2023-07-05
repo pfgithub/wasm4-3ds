@@ -3,7 +3,7 @@ const include_dirs = [
   devkitpro + "/libctru/include",
   devkitpro + "/portlibs/3ds/include",
   "src",
-  "artifact",
+  "intermediate",
   "vendor",
 ];
 const zig_flags = [
@@ -16,23 +16,54 @@ const zig_flags = [
 const c_files = [
   "src/c.c",
   // "src/main.c",
-  "artifact/game.c",
+  "intermediate/game.c",
 ];
 const c_flags = ["-lcitro2d", "-lcitro3d", "-lctru", "-lm"];
 
 async function clean() {
-  await exec(["rm", "-rf", "artifact", "zig-cache"]);
+  await exec(["rm", "-rf", "intermediate"]);
+}
+async function cleanAll() {
+  await exec(["rm", "-rf", "artifact", "zig-cache", "zig-out"]);
 }
 
-async function main() {
-  const build_mode = "ReleaseFast";
+const b = {
+  option(name, values, default_value) {
+    const val = b.flags.get(name);
+    if(val == null) return default_value;
+    if(Array.isArray(values)) {
+      if(!values.includes(val)) {
+        console.error("-D"+name+" expected one of:\n"+values.map(v => "-D"+name+"="+v).join("\n"));
+        process.exit(1);
+      }
+      return val;
+    }
+    return val;
+  },
+  error(msg) {
+    console.error(msg);
+    process.exit(1);
+  },
+  args: [],
+  flags: new Map(),
+};
 
+async function main() {
+  const build_mode = b.option("optimize", ["ReleaseFast", "ReleaseSafe", "ReleaseSmall", "Debug"], "Debug");
+  const game = b.option("game", "string", null);
+  if(game == null) b.error("Expected -Dgame=<gamename>");
+
+  const gamefile = "vendor/games/"+game+".wasm";
+
+  await exec(["mkdir", "-p", "intermediate"]);
   await exec(["mkdir", "-p", "artifact"]);
 
-  await exec(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "artifact/game.c"]);
-  let gamecontent = await Bun.file("artifact/game.c").text();
+  await Bun.write("intermediate/game.wasm", Bun.file(gamefile));
+
+  await exec(["vendor/wasm2c", "intermediate/game.wasm", "-o", "intermediate/game.c"]);
+  let gamecontent = await Bun.file("intermediate/game.c").text();
   gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
-  await Bun.write("artifact/game.c", gamecontent);
+  await Bun.write("intermediate/game.c", gamecontent);
 
   let translate_c_res = await exec(["zig", "translate-c", "src/all-translate.h", ...zig_flags]);
   translate_c_res = translate_c_res.replaceAll("@\"\"", "__INVALID_IDENTIFIER");
@@ -48,24 +79,24 @@ async function main() {
     side: gfx3dSide_t,
     transferFlags: @"u32",
 };`, "pub const struct_C3D_RenderTarget_tag = opaque {};");
-  await Bun.write("artifact/translate_c_res.zig", translate_c_res);
+  await Bun.write("intermediate/translate_c_res.zig", translate_c_res);
 
   await exec([
     "zig", "build-exe", "src/main.zig",
     "-ofmt=c",
     ...zig_flags,
-    "-femit-bin=artifact/zigpart.c",
-    "-femit-h=artifact/zigpart.h",
+    "-femit-bin=intermediate/zigpart.c",
+    "-femit-h=intermediate/zigpart.h",
     //"-OReleaseSafe",
     "-O"+build_mode,
-    "--mod", "c::artifact/translate_c_res.zig",
+    "--mod", "c::intermediate/translate_c_res.zig",
     "--deps", "c",
     "-freference-trace",
   ]);
 
-  let content = await Bun.file("artifact/zigpart.c").text();
+  let content = await Bun.file("intermediate/zigpart.c").text();
   content = content.replaceAll("enum {\n};", "");
-  await Bun.write("artifact/zigpart.c", content);
+  await Bun.write("intermediate/zigpart.c", content);
 
   await exec([
     devkitpro + "/devkitARM/bin/arm-none-eabi-gcc",
@@ -75,13 +106,13 @@ async function main() {
     "-mfloat-abi=hard",
     "-mtp=soft",
     "-specs=" + devkitpro + "/devkitARM/arm-none-eabi/lib/3dsx.specs",
-    "artifact/zigpart.c",
+    "intermediate/zigpart.c",
     ...c_files,
     ...include_dirs.map(id => "-I" + id),
     "-L" + devkitpro + "/libctru/lib",
     "-L" + devkitpro + "/portlibs/3ds/lib",
     ...c_flags,
-    "-o", "artifact/zig-3ds.elf",
+    "-o", "intermediate/game.elf",
     "-Wno-incompatible-pointer-types",
     "-Wno-builtin-declaration-mismatch",
     build_mode === "Debug" ? "" : "-O3",
@@ -89,11 +120,13 @@ async function main() {
 
   await exec([
     devkitpro + "/tools/bin/3dsxtool",
-    "artifact/zig-3ds.elf",
-    "artifact/zig-3ds.3dsx",
+    "intermediate/game.elf",
+    "intermediate/game.3dsx",
   ]);
 
-  // Bun.execSync(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "artifact/game.c"]);
+  await Bun.write("artifact/"+game+".3dsx", Bun.file("intermediate/game.3dsx"));
+
+  // Bun.execSync(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "intermediate/game.c"]);
 }
 
 async function exec(cmd) {
@@ -105,5 +138,41 @@ async function exec(cmd) {
   return new TextDecoder().decode(res.stdout);
 }
 
-await main();
-// await clean();
+const args = process.argv.slice(2);
+let cmd = [];
+while(args.length) {
+  const arg = args.shift();
+  if(arg.startsWith("-")) {
+    if(arg === "--") {
+      b.args = args;
+      break;
+    }else if(arg.startsWith("-D")) {
+      const namev = arg.substring(2);
+      let namevs = namev.split("=");
+      const n0 = namevs.shift();
+      const n1 = namevs.join("=");
+      b.flags.set(n0, n1);
+    }else {
+      console.error("bad arg: "+arg);
+      process.exit(1);
+    }
+  }else{
+    cmd.push(arg);
+  }
+}
+
+if(!cmd.length) {
+  console.error("No command specified");
+  process.exit(1);
+}
+while(cmd.length) {
+  const cmdv = cmd.shift();
+  if(cmdv === "clean") {
+    await clean();
+  }else if(cmdv === "clean-all") {
+    await clean();
+    await cleanAll();
+  } else if(cmdv === "build") {
+    await main();
+  }
+}

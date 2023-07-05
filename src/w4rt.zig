@@ -12,7 +12,7 @@ const WasmEnv = struct {
 pub const Game = struct {
     env: WasmEnv,
     alloc: std.mem.Allocator,
-    instance: c.w2c_plctfarmer,
+    instance: c.w2c_game,
 
     pub fn init(alloc: std.mem.Allocator) !*Game {
         var game = try alloc.create(Game);
@@ -30,16 +30,16 @@ pub const Game = struct {
         c.wasm_rt_allocate_memory(&env.memory, 1, 1, false);
         errdefer c.wasm_rt_free_memory(&env.memory);
 
-        c.wasm2c_plctfarmer_instantiate(&game.instance, @ptrCast(env));
-        errdefer c.wasm2c_plctfarmer_free(&game.instance);
+        c.wasm2c_game_instantiate(&game.instance, @ptrCast(env));
+        errdefer c.wasm2c_game_free(&game.instance);
 
-        c.w2c_plctfarmer_start(&game.instance);
+        c.w2c_game_start(&game.instance);
 
         return game;
     }
     pub fn free(game: *Game) void {
         const env = &game.env;
-        c.wasm2c_plctfarmer_free(&game.instance);
+        c.wasm2c_game_free(&game.instance);
         c.wasm_rt_free_memory(&env.memory);
         game.alloc.destroy(game);
     }
@@ -94,13 +94,13 @@ pub const Game = struct {
         }
 
         if(frame.reset_button_pressed) {
-            c.wasm2c_plctfarmer_free(&game.instance);
-            c.wasm2c_plctfarmer_instantiate(&game.instance, @ptrCast(env));
+            c.wasm2c_game_free(&game.instance);
+            c.wasm2c_game_instantiate(&game.instance, @ptrCast(env));
 
-            c.w2c_plctfarmer_start(&game.instance);
+            c.w2c_game_start(&game.instance);
         }
 
-        c.w2c_plctfarmer_update(&game.instance);
+        c.w2c_game_update(&game.instance);
     }
     pub fn render(game: *Game, input_data: anytype, comptime setPixel: fn(data: @TypeOf(input_data), x: usize, y: usize, r: u8, g: u8, b: u8) void) void {
         const env = &game.env;
