@@ -230,14 +230,18 @@ pub const Game = struct {
         return w2c_env_blitSub(game, image, x, y, w, h, 0, 0, w, flags);
     }
     export fn w2c_env_blitSub(game: *Game, image: u32, x: i32, y: i32, w: i32, h: i32, src_x: i32, src_y: i32, stride: i32, flags: u32) void {
+        const mem = game.getMem();
+        const img_slice = mem[image..];
+        game.blitSub(img_slice, x, y, w, h, src_x, src_y, stride, flags);
+    }
+    fn blitSub(game: *Game, image_ptr: []const u8, x: i32, y: i32, w: i32, h: i32, src_x: i32, src_y: i32, stride: i32, flags: u32) void {
         const flag_2bpp = (flags & 0b0001) != 0;
         const flag_flip_x = (flags & 0b0010) != 0; // 2,3 => -2,3 | 2:8,3:8 => 5:8,3:8
         const flag_flip_y = (flags & 0b0100) != 0; // 2,3 => 2,-3 | 2:8,3:8 => 2,8:4:8
         const flag_rotate_90 = (flags & 0b1000) != 0; // x,y=>-y,x
-        const mem = game.getMem();
 
         if(false) {
-            std.log.info("{any} x={}, y={}, w={}, h={}", .{mem[image..][0..@intCast(@divFloor((h + src_y)*stride+w, 4))], x, y, w, h});
+            std.log.info("{any} x={}, y={}, w={}, h={}", .{image_ptr[0..@intCast(@divFloor((h + src_y)*stride+w, 4))], x, y, w, h});
             // { 10101010, 170, 170, 170, 170, 170, 170, 170, 170, 6, 0, 0, 0, 0, 0, 0, 0, 4 } x=148, y=170, w=8, h=8
         }
 
@@ -254,11 +258,11 @@ pub const Game = struct {
                 const value: u2 = if (flag_2bpp) blk: {
                     var target_byte_index = target_bit_index / 4;
                     const target_bit: u3 = @as(u3, @as(u3, @intCast(3 - (target_bit_index % 4))) * 2);
-                    break :blk @intCast((mem[image + target_byte_index] >> target_bit) & 0b11);
+                    break :blk @intCast((image_ptr[target_byte_index] >> target_bit) & 0b11);
                 }else blk: {
                     const target_byte_index = target_bit_index / 8;
                     const target_bit: u3 = 7 - @as(u3, @intCast(target_bit_index % 8));
-                    break :blk @intCast((mem[image + target_byte_index] >> target_bit) & 0b1);
+                    break :blk @intCast((image_ptr[target_byte_index] >> target_bit) & 0b1);
                 };
 
                 applyTransformations(&tx, &ty, w, h, flag_flip_x, flag_flip_y, flag_rotate_90);
@@ -270,11 +274,38 @@ pub const Game = struct {
     fn getMem(game: *Game) []u8 {
         return game.env.memory.data[0..game.env.memory.size];
     }
-    export fn w2c_env_textUtf8(game: *Game, str: u32, len: u32, x: u32, y: u32) void {
+    export fn w2c_env_textUtf8(game: *Game, str_ptr: u32, len: u32, x_in: i32, y_in: i32) void {
         const mem = game.getMem();
-        std.log.info("TODO text \"{s}\" {} {}", .{mem[str..][0..len], x, y});
+        const str = mem[str_ptr..][0..len];
+        var codepoint_iter = (std.unicode.Utf8View.init(str) catch {
+            // why do we have to pre-validate?
+            // why can't we catch errors while we iterate?
+            std.log.err("invalid utf-8 string: \"{s}\"", .{str});
+            return;
+        }).iterator();
+        var x: i32 = x_in;
+        var y: i32 = y_in;
+        while (codepoint_iter.nextCodepoint()) |codepoint| {
+            var index = codepoint;
+            if(codepoint == '\r') {
+                x = x_in;
+                continue;
+            }else if(codepoint == '\n') {
+                y += 8;
+                x = x_in;
+                continue;
+            }
+            if(index < ' ' or index > 256) {
+                // invalid char
+                index = '?';
+            }
+            index -= ' ';
+            const val: i32 = index;
+            game.blitSub(&wasm4_font.font, x, y, 8, 8, 0, val * 8, wasm4_font.font_width, wasm4_font.font_flags);
+            x += 8;
+        }
     }
-    export fn w2c_env_text(game: *Game, str: u32, x: u32, y: u32) void {
+    export fn w2c_env_text(game: *Game, str: u32, x: i32, y: i32) void {
         const env = &game.env;
         const len = std.mem.indexOfScalar(u8, env.memory.data[str..@intCast(env.memory.size)], 0) orelse return;
         w2c_env_textUtf8(game, str, @intCast(len), x, y);
