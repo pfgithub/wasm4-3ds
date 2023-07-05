@@ -186,14 +186,21 @@ pub const Game = struct {
         return std.mem.readIntLittle(u16, game.env.memory.data[0x14..][0..2]);
     }
 
-    export fn w2c_env_line(game: *Game, x1: u32, y1: u32, x2: u32, y2: u32) void {
+    export fn w2c_env_line(game: *Game, x1: i32, y1: i32, x2: i32, y2: i32) void {
         _ = game;
         std.log.info("TODO line {} {} {} {}", .{x1, y1, x2, y2});
     }
 
-    export fn w2c_env_rect(game: *Game, x: u32, y: u32, w: u32, h: u32) void {
-        _ = game;
-        std.log.info("TODO rect {} {} {} {}", .{x, y, w, h});
+    export fn w2c_env_rect(game: *Game, x: i32, y: i32, w: i32, h: i32) void {
+        const draw_colors = game.drawColors();
+        for(0..std.math.lossyCast(usize, h)) |yo_u| {
+            const yo: i32 = @intCast(yo_u);
+            for(0..std.math.lossyCast(usize, w)) |xo_u| {
+                const xo: i32 = @intCast(xo_u);
+                const is_outline = yo == 0 or yo == h - 1 or xo == 0 or xo == w - 1;
+                game.writePixel(x + xo, y + yo, if(is_outline) 0b01 else 0b00, draw_colors);
+            }
+        }
     }
 
     fn writePixel(game: *Game, x: i32, y: i32, value: u2, draw_colors: u16) void {
