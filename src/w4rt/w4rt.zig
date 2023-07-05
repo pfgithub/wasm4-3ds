@@ -284,20 +284,14 @@ pub const Game = struct {
     export fn w2c_env_textUtf8(game: *Game, str_ptr: u32, len: u32, x_in: i32, y_in: i32) void {
         const mem = game.getMem();
         const str = mem[str_ptr..][0..len];
-        var codepoint_iter = (std.unicode.Utf8View.init(str) catch {
-            // why do we have to pre-validate?
-            // why can't we catch errors while we iterate?
-            std.log.err("invalid utf-8 string: \"{s}\"", .{str});
-            return;
-        }).iterator();
         var x: i32 = x_in;
         var y: i32 = y_in;
-        while (codepoint_iter.nextCodepoint()) |codepoint| {
-            var index = codepoint;
-            if(codepoint == '\r') {
+        for (str) |byte| {
+            var index = byte;
+            if(byte == '\r') {
                 x = x_in;
                 continue;
-            }else if(codepoint == '\n') {
+            }else if(byte == '\n') {
                 y += 8;
                 x = x_in;
                 continue;
