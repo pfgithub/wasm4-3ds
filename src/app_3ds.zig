@@ -1,7 +1,7 @@
 const c = @import("c");
 const std = @import("std");
 
-const w4 = @import("w4rt/w4rt.zig");
+const w4 = @import("w4rt");
 
 export fn main(_: c_int, _: [*]const u8) c_int {
     app_main() catch @panic("error");

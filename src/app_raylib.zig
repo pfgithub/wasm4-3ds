@@ -2,7 +2,7 @@ const std = @import("std");
 const ray = @cImport({
     @cInclude("raylib.h");
 });
-const w4 = @import("w4rt/w4rt.zig");
+const w4 = @import("w4rt");
 
 pub fn main() !void {
     const alloc = std.heap.c_allocator;

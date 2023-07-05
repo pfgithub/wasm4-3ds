@@ -48,11 +48,17 @@ async function main() {
   gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
   await Bun.write("intermediate/game.c", gamecontent);
 
-  await exec(["w4", "png2src", "src/w4rt/font.png", "--c", "-o", "intermediate/font.png"]);
+  await exec(["w4", "png2src", "src/w4rt/font.png", "--zig", "-o", "intermediate/wasm4_font.zig"]); // would be nice if this could emit a binary file for @embedFile
 
-  await Bun.write("intermediate/build_options.zig", "pub const title = "+JSON.stringify(game)+";");
-  const mods = ["build_options"];
-  const mod_flags = ["--mod", "build_options::intermediate/build_options.zig"];
+  await Bun.write("intermediate/wasm4_options.zig", "pub const title = "+JSON.stringify(game)+";");
+  const mods = [
+    "w4rt",
+  ];
+  const mod_flags = [
+    "--mod", "wasm4_options::intermediate/wasm4_options.zig",
+    "--mod", "wasm4_font::intermediate/wasm4_font.zig",
+    "--mod", "w4rt:wasm4_options,wasm4_font:src/w4rt/w4rt.zig",
+  ];
   const all_zig_flags = [
     "-O"+build_mode,
     ...mod_flags,
@@ -220,5 +226,7 @@ while(cmd.length) {
     await cleanAll();
   } else if(cmdv === "build") {
     await main();
+  } else if(cmdv === "run") {
+    b.flags.set("run", "true");
   }
 }
