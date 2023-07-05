@@ -134,7 +134,7 @@ fn app_main() !void {
 
 pub const std_options = struct {
     // Set the log level to info
-    pub const log_level = .info;
+    // pub const log_level = .info; // logging lags so disable it in release
     // Define logFn to override the std implementation
     pub const logFn = myLogFn;
 };
