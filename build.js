@@ -1,25 +1,3 @@
-const devkitpro = "/opt/devkitpro";
-const include_dirs = [
-  devkitpro + "/libctru/include",
-  devkitpro + "/portlibs/3ds/include",
-  "src",
-  "intermediate",
-  "vendor",
-];
-const zig_flags = [
-  "-target", "arm-freestanding-eabihf",
-  "-mcpu=mpcore",
-  ...include_dirs.map(id => "-I" + id),
-  "-lc",
-  "--libc", "libc.txt",
-];
-const c_files = [
-  "src/c.c",
-  // "src/main.c",
-  "intermediate/game.c",
-];
-const c_flags = ["-lcitro2d", "-lcitro3d", "-lctru", "-lm"];
-
 async function clean() {
   await exec(["rm", "-rf", "intermediate"]);
 }
@@ -30,11 +8,15 @@ async function cleanAll() {
 const b = {
   option(name, values, default_value) {
     const val = b.flags.get(name);
-    if(val == null) return default_value;
+    if(val == null) {
+      if(default_value === undefined) {
+        b.error("Expected -D"+name+" with one of:\n"+values.map(v => "-D"+name+"="+v).join("\n"));
+      }
+      return default_value;
+    }
     if(Array.isArray(values)) {
       if(!values.includes(val)) {
-        console.error("-D"+name+" expected one of:\n"+values.map(v => "-D"+name+"="+v).join("\n"));
-        process.exit(1);
+        b.error("-D"+name+" expected one of:\n"+values.map(v => "-D"+name+"="+v).join("\n"));
       }
       return val;
     }
@@ -50,8 +32,9 @@ const b = {
 
 async function main() {
   const build_mode = b.option("optimize", ["ReleaseFast", "ReleaseSafe", "ReleaseSmall", "Debug"], "Debug");
-  const game = b.option("game", "string", null);
-  if(game == null) b.error("Expected -Dgame=<gamename>");
+  const game = b.option("game", "string");
+  const platform = b.option("platform", ["3ds", "raylib"]);
+  const run = b.option("run", "string", false);
 
   const gamefile = "vendor/games/"+game+".wasm";
 
@@ -67,66 +50,127 @@ async function main() {
 
   await exec(["w4", "png2src", "src/w4rt/font.png", "--c", "-o", "intermediate/font.png"]);
 
-  let translate_c_res = await exec(["zig", "translate-c", "src/all-translate.h", ...zig_flags]);
-  translate_c_res = translate_c_res.replaceAll("@\"\"", "__INVALID_IDENTIFIER");
-  translate_c_res = translate_c_res.replaceAll(`pub const struct_C3D_RenderTarget_tag = extern struct {
-    next: ?*C3D_RenderTarget,
-    prev: ?*C3D_RenderTarget,
-    frameBuf: C3D_FrameBuf,
-    used: bool,
-    ownsColor: bool,
-    ownsDepth: bool,
-    linked: bool,
-    screen: gfxScreen_t,
-    side: gfx3dSide_t,
-    transferFlags: @"u32",
-};`, "pub const struct_C3D_RenderTarget_tag = opaque {};");
-  await Bun.write("intermediate/translate_c_res.zig", translate_c_res);
-
-  await exec([
-    "zig", "build-exe", "src/main.zig",
-    "-ofmt=c",
-    ...zig_flags,
-    "-femit-bin=intermediate/zigpart.c",
-    "-femit-h=intermediate/zigpart.h",
-    //"-OReleaseSafe",
+  await Bun.write("intermediate/build_options.zig", "pub const title = "+JSON.stringify(game)+";");
+  const mods = ["build_options"];
+  const mod_flags = ["--mod", "build_options::intermediate/build_options.zig"];
+  const all_zig_flags = [
     "-O"+build_mode,
-    "--mod", "c::intermediate/translate_c_res.zig",
-    "--deps", "c",
-    "-freference-trace",
-  ]);
+    ...mod_flags,
+  ];
 
-  let content = await Bun.file("intermediate/zigpart.c").text();
-  content = content.replaceAll("enum {\n};", "");
-  await Bun.write("intermediate/zigpart.c", content);
+  if(platform === "raylib") {
+    const raylib_flags = await exec([
+      "pkg-config", "raylib", "--cflags", "--libs",
+    ]);
+    const raylib_flags_split = raylib_flags.split(" ").map(f => f.trim());
+    await exec([
+      "zig", "build-exe", "src/app_raylib.zig",
+      ...all_zig_flags,
+      "-femit-bin=intermediate/game",
+      ...raylib_flags_split,
+      "-lc",
+      "--deps", [...mods].join(","),
+      "-I" + "intermediate",
+      "-I" + "vendor",
+      "intermediate/game.c",
+      "-freference-trace",
+    ]);
 
-  await exec([
-    devkitpro + "/devkitARM/bin/arm-none-eabi-gcc",
-    "-g",
-    "-march=armv6k",
-    "-mtune=mpcore",
-    "-mfloat-abi=hard",
-    "-mtp=soft",
-    "-specs=" + devkitpro + "/devkitARM/arm-none-eabi/lib/3dsx.specs",
-    "intermediate/zigpart.c",
-    ...c_files,
-    ...include_dirs.map(id => "-I" + id),
-    "-L" + devkitpro + "/libctru/lib",
-    "-L" + devkitpro + "/portlibs/3ds/lib",
-    ...c_flags,
-    "-o", "intermediate/game.elf",
-    "-Wno-incompatible-pointer-types",
-    "-Wno-builtin-declaration-mismatch",
-    build_mode === "Debug" ? "" : "-O3",
-  ]);
+    const out_name = "artifact/"+game+"-native";
+    await Bun.write(out_name, Bun.file("intermediate/game"));
 
-  await exec([
-    devkitpro + "/tools/bin/3dsxtool",
-    "intermediate/game.elf",
-    "intermediate/game.3dsx",
-  ]);
+    if(run !== false) {
+      await exec([out_name, ...b.args]);
+    }
+  }else if(platform === "3ds") {
+    const devkitpro = "/opt/devkitpro";
+    const include_dirs = [
+      devkitpro + "/libctru/include",
+      devkitpro + "/portlibs/3ds/include",
+      "src/app_3ds",
+      "intermediate",
+      "vendor",
+    ];
+    const zig_flags_3ds = [
+      "-target", "arm-freestanding-eabihf",
+      "-mcpu=mpcore",
+      ...include_dirs.map(id => "-I" + id),
+      "-lc",
+      "--libc", "libc.txt",
+    ];
+    const c_files = [
+      "src/app_3ds/c.c",
+      "intermediate/game.c",
+    ];
+    const c_flags = ["-lcitro2d", "-lcitro3d", "-lctru", "-lm"];
 
-  await Bun.write("artifact/"+game+".3dsx", Bun.file("intermediate/game.3dsx"));
+    let translate_c_res = await exec([
+      "zig", "translate-c", "src/app_3ds/all-translate.h",
+      ...zig_flags_3ds,
+    ]);
+      translate_c_res = translate_c_res.replaceAll("@\"\"", "__INVALID_IDENTIFIER");
+      translate_c_res = translate_c_res.replaceAll(""
+        + "pub const struct_C3D_RenderTarget_tag = extern struct {\n"
+        + "    next: ?*C3D_RenderTarget,\n"
+        + "    prev: ?*C3D_RenderTarget,\n"
+        + "    frameBuf: C3D_FrameBuf,\n"
+        + "    used: bool,\n"
+        + "    ownsColor: bool,\n"
+        + "    ownsDepth: bool,\n"
+        + "    linked: bool,\n"
+        + "    screen: gfxScreen_t,\n"
+        + "    side: gfx3dSide_t,\n"
+        + "    transferFlags: @\"u32\",\n"
+        + "};",
+        "pub const struct_C3D_RenderTarget_tag = opaque {};",
+      );
+      await Bun.write("intermediate/translate_c_res.zig", translate_c_res);
+
+    await exec([
+      "zig", "build-exe", "src/app_3ds.zig",
+      "-ofmt=c",
+      ...zig_flags_3ds,
+      ...all_zig_flags,
+      "-femit-bin=intermediate/zigpart.c",
+      "-femit-h=intermediate/zigpart.h",
+      //"-OReleaseSafe",
+      "--mod", "c::intermediate/translate_c_res.zig",
+      "--deps", ["c", ...mods].join(","),
+      "-freference-trace",
+    ]);
+
+    let content = await Bun.file("intermediate/zigpart.c").text();
+    content = content.replaceAll("enum {\n};", "");
+    await Bun.write("intermediate/zigpart.c", content);
+
+    await exec([
+      devkitpro + "/devkitARM/bin/arm-none-eabi-gcc",
+      "-g",
+      "-march=armv6k",
+      "-mtune=mpcore",
+      "-mfloat-abi=hard",
+      "-mtp=soft",
+      "-specs=" + devkitpro + "/devkitARM/arm-none-eabi/lib/3dsx.specs",
+      "intermediate/zigpart.c",
+      ...c_files,
+      ...include_dirs.map(id => "-I" + id),
+      "-L" + devkitpro + "/libctru/lib",
+      "-L" + devkitpro + "/portlibs/3ds/lib",
+      ...c_flags,
+      "-o", "intermediate/game.elf",
+      "-Wno-incompatible-pointer-types",
+      "-Wno-builtin-declaration-mismatch",
+      build_mode === "Debug" ? "" : "-O3",
+    ]);
+
+    await exec([
+      devkitpro + "/tools/bin/3dsxtool",
+      "intermediate/game.elf",
+      "intermediate/game.3dsx",
+    ]);
+
+    await Bun.write("artifact/"+game+".3dsx", Bun.file("intermediate/game.3dsx"));
+  }
 
   // Bun.execSync(["vendor/wasm2c", "vendor/plctfarmer.wasm", "-o", "intermediate/game.c"]);
 }

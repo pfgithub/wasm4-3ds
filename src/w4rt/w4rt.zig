@@ -2,12 +2,15 @@ const std = @import("std");
 const c = @cImport({
     @cInclude("game.h");
 });
+const build_options = @import("build_options");
 
 const WasmEnv = struct {
     memory: c.wasm_rt_memory_t,
     disk_len: u32 = 0,
     disk: [1024]u8,
 };
+
+pub const title = build_options.title;
 
 pub const Game = struct {
     env: WasmEnv,
