@@ -34,6 +34,8 @@ pub const Game = struct {
         c.wasm_rt_allocate_memory(&env.memory, 1, 1, false);
         errdefer c.wasm_rt_free_memory(&env.memory);
 
+
+        for(game.getMem()) |*byte| byte.* = 0;
         c.wasm2c_game_instantiate(&game.instance, @ptrCast(game));
         errdefer c.wasm2c_game_free(&game.instance);
 
@@ -99,6 +101,7 @@ pub const Game = struct {
 
         if(frame.reset_button_pressed) {
             c.wasm2c_game_free(&game.instance);
+            for(game.getMem()) |*byte| byte.* = 0;
             c.wasm2c_game_instantiate(&game.instance, @ptrCast(env));
 
             c.w2c_game_start(&game.instance);
@@ -232,6 +235,11 @@ pub const Game = struct {
         const flag_flip_y = (flags & 0b0100) != 0; // 2,3 => 2,-3 | 2:8,3:8 => 2,8:4:8
         const flag_rotate_90 = (flags & 0b1000) != 0; // x,y=>-y,x
         const mem = game.getMem();
+
+        if(false) {
+            std.log.info("{any} x={}, y={}, w={}, h={}", .{mem[image..][0..@intCast(@divFloor((h + src_y)*stride+w, 4))], x, y, w, h});
+            // { 10101010, 170, 170, 170, 170, 170, 170, 170, 170, 6, 0, 0, 0, 0, 0, 0, 0, 4 } x=148, y=170, w=8, h=8
+        }
 
         const draw_colors = game.drawColors();
         if(h < 0 or w < 0) unreachable;
