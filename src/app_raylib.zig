@@ -12,6 +12,7 @@ pub fn main() !void {
     defer ray.CloseWindow();
 
     ray.SetTargetFPS(60);
+    ray.SetExitKey(0);
 
     var game = try w4.Game.init(alloc);
     defer game.free();
@@ -72,8 +73,9 @@ pub fn main() !void {
                 .{},
                 .{},
             },
-            .reset_button_pressed = ray.IsKeyPressed(ray.KEY_R),
+            .pause_button_pressed = ray.IsKeyPressed(ray.KEY_R) or ray.IsKeyPressed(ray.KEY_ESCAPE),
         });
+        if(game.should_exit) break;
 
         game.render(image_data, struct{fn f(image_data2: *[160*160*3]u8, x: usize, y: usize, r: u8, g: u8, b: u8) void {
             const v = y * 160 + x;

@@ -1,9 +1,25 @@
 const std = @import("std");
 const c = @cImport({
     @cInclude("game.h");
+    @cInclude("save_manager.h");
 });
 const build_options = @import("wasm4_options");
 const wasm4_font = @import("wasm4_font");
+
+fn WasmFns(comptime name: []const u8) type {
+    return struct {
+        pub const instantiate = @field(c, "wasm2c_" ++ name ++ "_instantiate");
+        pub const free = @field(c, "wasm2c_" ++ name ++ "_free");
+        pub const instance = @field(c, "w2c_" ++ name);
+        pub const start = if(@hasField(c, "w2c_" ++ name ++ "_start")) (
+            @field(c, "w2c_" ++ name ++ "_start")
+        ) else struct{fn f(_: *instance) void {}}.f;
+        pub const update = @field(c, "w2c_" ++ name ++ "_update");
+    };
+}
+
+const wasm = WasmFns("save__manager");
+// const wasm = WasmFns("game");
 
 const WasmEnv = struct {
     memory: c.wasm_rt_memory_t,
@@ -16,7 +32,14 @@ pub const title = build_options.title;
 pub const Game = struct {
     env: WasmEnv,
     alloc: std.mem.Allocator,
-    instance: c.w2c_game,
+    instance: wasm.instance,
+    initial_ram: []u8,
+    should_exit: bool = false,
+    playing: bool = false,
+
+    set_continue: bool = false,
+    set_exit: bool = false,
+    pause_button_pressed: bool = false,
 
     pub fn init(alloc: std.mem.Allocator) !*Game {
         var game = try alloc.create(Game);
@@ -28,24 +51,27 @@ pub const Game = struct {
             },
             .alloc = alloc,
             .instance = undefined,
+            .initial_ram = undefined,
         };
         const env = &game.env;
 
         c.wasm_rt_allocate_memory(&env.memory, 1, 1, false);
         errdefer c.wasm_rt_free_memory(&env.memory);
 
-
         for(game.getMem()) |*byte| byte.* = 0;
-        c.wasm2c_game_instantiate(&game.instance, @ptrCast(game));
-        errdefer c.wasm2c_game_free(&game.instance);
+        wasm.instantiate(&game.instance, @ptrCast(game));
+        errdefer wasm.free(&game.instance);
 
-        c.w2c_game_start(&game.instance);
+        game.initial_ram = try alloc.dupe(u8, game.getMem());
+
+        wasm.start(&game.instance);
 
         return game;
     }
     pub fn free(game: *Game) void {
         const env = &game.env;
-        c.wasm2c_game_free(&game.instance);
+        game.alloc.free(game.initial_ram);
+        wasm.free(&game.instance);
         c.wasm_rt_free_memory(&env.memory);
         game.alloc.destroy(game);
     }
@@ -65,11 +91,28 @@ pub const Game = struct {
         mouse_right: bool = false,
         mouse_middle: bool = false,
         pads: [4]PadButtons,
-        reset_button_pressed: bool = false,
+        pause_button_pressed: bool = false,
     };
+
+    fn resetGame(game: *Game) void {
+        const game_mem = game.getMem();
+        std.mem.copy(u8, game_mem, game.initial_ram);
+    }
 
     pub fn update(game: *Game, frame: FrameIn) void {
         const env = &game.env;
+
+        game.pause_button_pressed = false;
+        if(frame.pause_button_pressed) {
+            if(game.playing) {
+                game.playing = false;
+                // const game_fb = env.memory.data[0xA0..][0..6400];
+                // copy framebuffer into pause menu framebuffer
+
+            }else{
+                game.pause_button_pressed = true;
+            }
+        }
 
         const mouse_x = frame.mouse_x;
         const mouse_y = frame.mouse_y;
@@ -99,14 +142,6 @@ pub const Game = struct {
             ;
         }
 
-        if(frame.reset_button_pressed) {
-            c.wasm2c_game_free(&game.instance);
-            for(game.getMem()) |*byte| byte.* = 0;
-            c.wasm2c_game_instantiate(&game.instance, @ptrCast(env));
-
-            c.w2c_game_start(&game.instance);
-        }
-
         const system_flags = env.memory.data[0x1F];
         const flag_preserve_framebuffer = (system_flags & 0b01) != 0;
         if(!flag_preserve_framebuffer) {
@@ -114,7 +149,15 @@ pub const Game = struct {
             for(rendered_frame) |*pixel| pixel.* = 0;
         }
 
-        c.w2c_game_update(&game.instance);
+        wasm.update(&game.instance);
+
+        if(game.set_continue) {
+            game.playing = true;
+        }
+        if(game.set_exit) {
+            game.should_exit = true;
+            return;
+        }
     }
     pub fn render(game: *Game, input_data: anytype, comptime setPixel: fn(data: @TypeOf(input_data), x: usize, y: usize, r: u8, g: u8, b: u8) void) void {
         const env = &game.env;
@@ -321,6 +364,22 @@ pub const Game = struct {
     export fn w2c_env_tone(game: *Game, frequency: u32, duration: u32, volume: u32, flags: u32) void {
         _ = game;
         std.log.info("TODO tone {} {} {} {}", .{frequency, duration, volume, flags});
+    }
+
+    export fn w2c_env_w4rt_set_continue(game: *Game) void {
+        game.set_continue = true;
+        std.log.info("TODO w4rt_set_continue", .{});
+    }
+    export fn w2c_env_w4rt_set_exit(game: *Game) void {
+        game.set_exit = true;
+        std.log.info("TODO w4rt_set_exit", .{});
+    }
+    export fn w2c_env_w4rt_pause_button_pressed(game: *Game) bool {
+        return game.pause_button_pressed;
+    }
+    export fn w2c_env_w4rt_load(game: *Game, save_id: u32) void {
+        _ = game;
+        std.log.info("TODO w4rt_load {d}", .{save_id});
     }
 
     export fn wasm_rt_is_initialized() bool {

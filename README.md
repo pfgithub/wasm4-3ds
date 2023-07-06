@@ -1,7 +1,16 @@
 run wasm4 games on 3ds
 
-1. put wasm file in vendor/plctfarmer.wasm
-2. `zig build run` (devkitpro must be installed & must be on macos-x86_64)
+building (macos-x86_64 only)
+
+install:
+- bun (https://bun.sh),
+- zig (https://ziglang.org),
+- node, npm (https://nodejs.org) (might not be necessary)
+- wasm4 (https://wasm4.org) (`npm install --global wasm4` / `bun add --global wasm4`),
+- devkitpro (`dkp-pacman -S 3ds-dev`)
+
+1. add wasm files to `vendor/games/`
+2. build and run: `bun build.js clean build -Dgame=GAMENAME -Dplatform=raylib -Drun`
 
 # TODO
 

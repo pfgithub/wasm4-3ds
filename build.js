@@ -43,10 +43,28 @@ async function main() {
 
   await Bun.write("intermediate/game.wasm", Bun.file(gamefile));
 
-  await exec(["vendor/wasm2c", "intermediate/game.wasm", "-o", "intermediate/game.c"]);
-  let gamecontent = await Bun.file("intermediate/game.c").text();
-  gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
-  await Bun.write("intermediate/game.c", gamecontent);
+  await exec([
+    "zig", "build-lib", "src/wasm4_save_file_manager/sfm.zig",
+    "-target", "wasm32-freestanding",
+    "--import-memory",
+    "--initial-memory=65536",
+    "--max-memory=65536",
+    "--stack", "14752",
+    "--export=start", "--export=update",
+    "-femit-bin=intermediate/save_manager.wasm",
+    "-O" + build_mode,
+    "-dynamic",
+  ]);
+  // await Bun.write("intermediate/save_manager.wasm", Bun.file("intermediate/save_manager.wasm.o"));
+
+  async function callWasm2c(src, dest) {
+    await exec(["vendor/wasm2c", src, "-o", dest]);
+    let gamecontent = await Bun.file(dest).text();
+    gamecontent = gamecontent.replaceAll("WASM_RT_USE_STACK_DEPTH_COUNT", "false");
+    await Bun.write(dest, gamecontent);
+  }
+  await callWasm2c("intermediate/game.wasm", "intermediate/game.c");
+  await callWasm2c("intermediate/save_manager.wasm", "intermediate/save_manager.c");
 
   await exec(["w4", "png2src", "src/w4rt/font.png", "--zig", "-o", "intermediate/wasm4_font.zig"]); // would be nice if this could emit a binary file for @embedFile
 
@@ -63,6 +81,10 @@ async function main() {
     "-O"+build_mode,
     ...mod_flags,
   ];
+  const base_c_files = [
+    "intermediate/game.c",
+    "intermediate/save_manager.c",
+  ];
 
   if(platform === "raylib") {
     const raylib_flags = await exec([
@@ -78,7 +100,7 @@ async function main() {
       "--deps", [...mods].join(","),
       "-I" + "intermediate",
       "-I" + "vendor",
-      "intermediate/game.c",
+      ...base_c_files,
       "-freference-trace",
     ]);
 
@@ -105,8 +127,8 @@ async function main() {
       "--libc", "libc.txt",
     ];
     const c_files = [
+      ...base_c_files,
       "src/app_3ds/c.c",
-      "intermediate/game.c",
     ];
     const c_flags = ["-lcitro2d", "-lcitro3d", "-lctru", "-lm"];
 

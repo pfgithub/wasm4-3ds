@@ -45,7 +45,6 @@ fn app_main() !void {
         c.hidScanInput();
 
         const k_down = c.hidKeysDown();
-        if(k_down & c.KEY_START != 0) break;
         const k_held = c.hidKeysHeld();
 
         var touch: c.touchPosition = undefined;
@@ -64,7 +63,7 @@ fn app_main() !void {
         //std.log.info("GPU: {d}.{d:0>2}%", .{draw_time / 100, draw_time % 100});
         //std.log.info("CmdBuf: {d}.{d:0>2}%", .{cmdbuf_usage, cmdbuf_usage % 100});
         std.log.info("Frame: {d}", .{i});
-        if(k_held & c.KEY_TOUCH != 0) std.log.info("Touch: {d}, {d}", .{touch.px, touch.py});
+        // if(k_held & c.KEY_TOUCH != 0) std.log.info("Touch: {d}, {d}", .{touch.px, touch.py});
 
 		// Render the scene
 		game.update(.{
@@ -93,8 +92,9 @@ fn app_main() !void {
                 .{},
                 .{},
             },
-            .reset_button_pressed = false, // start : esc menu, one option will be 'reset'
+            .pause_button_pressed = k_down & c.KEY_START != 0, // start : esc menu, one option will be 'reset'
         });
+        if(game.should_exit) break;
 
 		//if(!c.C3D_FrameBegin(c.C3D_FRAME_SYNCDRAW)) @panic("frame start fail");
 		//c.C2D_TargetClear(top, clr_clear);
