@@ -279,7 +279,7 @@ pub const Game = struct {
     }
 
     fn getMem(game: *Game) []u8 {
-        return game.env.memory.data[0..game.env.memory.size];
+        return game.env.memory.data[0..@intCast(game.env.memory.size)];
     }
     export fn w2c_env_textUtf8(game: *Game, str_ptr: u32, len: u32, x_in: i32, y_in: i32) void {
         const mem = game.getMem();
