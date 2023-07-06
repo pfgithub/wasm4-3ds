@@ -148,3 +148,18 @@ pub fn myLogFn(
     //const stderr = std.io.getStdErr().writer();
     //nosuspend stderr.print(prefix ++ format ++ "\n", args) catch return;
 }
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    _ = c.printf("PANIC: ");
+    for(msg) |char| _ = c.printf("%c", char);
+    _ = c.printf("\n");
+
+    while(c.aptMainLoop()) {
+        // do nothing
+		c.gfxFlushBuffers();
+        c.c_gspWaitForVBlank();
+        c.gfxSwapBuffers();
+    }
+    c.aptExit(); // what does this do?
+    unreachable;
+}
