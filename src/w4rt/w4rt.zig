@@ -18,8 +18,8 @@ fn WasmFns(comptime name: []const u8) type {
     };
 }
 
-const wasm = WasmFns("save__manager");
-// const wasm = WasmFns("game");
+// const wasm = WasmFns("save__manager");
+const wasm = WasmFns("game");
 
 const WasmEnv = struct {
     memory: c.wasm_rt_memory_t,
@@ -59,6 +59,11 @@ pub const Game = struct {
         errdefer c.wasm_rt_free_memory(&env.memory);
 
         for(game.getMem()) |*byte| byte.* = 0;
+        std.mem.writeIntLittle(u32, env.memory.data[0x04..][0..4], 0xe0f8cf);
+        std.mem.writeIntLittle(u32, env.memory.data[0x08..][0..4], 0x86c06c);
+        std.mem.writeIntLittle(u32, env.memory.data[0x0C..][0..4], 0x306850);
+        std.mem.writeIntLittle(u32, env.memory.data[0x10..][0..4], 0x071821);
+
         wasm.instantiate(&game.instance, @ptrCast(game));
         errdefer wasm.free(&game.instance);
 
@@ -339,6 +344,7 @@ pub const Game = struct {
                 x = x_in;
                 continue;
             }
+            if(index == '\x00') continue; // for utf-16
             if(index < ' ' or index > 256) {
                 // invalid char
                 index = '?';
@@ -349,16 +355,23 @@ pub const Game = struct {
             x += 8;
         }
     }
+    export fn w2c_env_textUtf16(game: *Game, str_ptr: u32, len: u32, x_in: i32, y_in: i32) void {
+        return w2c_env_textUtf8(game, str_ptr, len, x_in, y_in);
+    }
     export fn w2c_env_text(game: *Game, str: u32, x: i32, y: i32) void {
         const env = &game.env;
         const len = std.mem.indexOfScalar(u8, env.memory.data[str..@intCast(env.memory.size)], 0) orelse return;
         w2c_env_textUtf8(game, str, @intCast(len), x, y);
     }
+    export fn w2c_env_traceUtf8(game: *Game, str: u32, len: u32) void {
+        const mem = game.getMem();
+        const slice = mem[str..][0..len];
+        std.log.scoped(.trace).info("{s}", .{slice});
+    }
     export fn w2c_env_trace(game: *Game, str: u32) void {
         const env = &game.env;
         const len = std.mem.indexOfScalar(u8, env.memory.data[str..@intCast(env.memory.size)], 0) orelse return;
-        const slice = env.memory.data[str..][0..len];
-        std.log.scoped(.trace).info("{s}", .{slice});
+        w2c_env_traceUtf8(game, str, @intCast(len));
     }
 
     export fn w2c_env_tone(game: *Game, frequency: u32, duration: u32, volume: u32, flags: u32) void {
@@ -404,6 +417,9 @@ pub const Game = struct {
     export fn wasm_rt_free_memory(memory: *c.wasm_rt_memory_t) void {
         const alloc = std.heap.c_allocator;
         alloc.free(memory.data[0..@intCast(memory.size)]);
+    }
+    export fn wasm_rt_grow_memory(_: *c.wasm_rt_memory_t, _: u32) void {
+        @panic("grow not allowed");
     }
     export fn wasm_rt_allocate_funcref_table(table: *c.wasm_rt_funcref_table_t, elements: u32, max_elements: u32) void {
         const alloc = std.heap.c_allocator;
